@@ -1,0 +1,32 @@
+# 호스트로 포트를 내보내는 덧붙임 설정.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.expose.yml up -d
+#
+# 기본 구성은 포트를 하나도 열지 않는다. 밖에서 오는 연결은 cloudflared 가 아웃바운드로
+# 받기 때문이다. 이 파일은 두 경우에만 쓴다.
+#
+#   BIND_ADDR=127.0.0.1   이 컴퓨터에서만 열어보고 확인할 때 (기본값)
+#   BIND_ADDR=10.3.0.15   같은 연구실 망의 다른 PC 에서 붙어볼 때
+#
+# 연구실 망에 열면 그 망 안에서는 누구나 쓸 수 있는 리졸버가 된다. 방화벽 안이라
+# 인터넷에는 노출되지 않지만, 공인 IP 가 붙는 위치에서는 절대 이렇게 열지 않는다.
+
+services:
+  unbound:
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:53:53/udp"     # 랩 PC 가 DNS 서버로 지정할 주소
+      - "${BIND_ADDR:-127.0.0.1}:53:53/tcp"
+      - "${BIND_ADDR:-127.0.0.1}:8053:8053"     # DoH 종단
+      - "${BIND_ADDR:-127.0.0.1}:9101:9101"     # 판별 모듈 지표
+
+  api:
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:5000:5000"
+
+  prometheus:
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:9090:9090"
+
+  grafana:
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
