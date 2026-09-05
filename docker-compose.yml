@@ -41,9 +41,11 @@ services:
       args:
         DNS_REF: ${DNS_REF:-main}
         MODEL_REF: ${MODEL_REF:-main}
+        CACHEBUST: ${CACHEBUST:-0}
     volumes:
       - ./artifacts:/srv/artifacts:ro
       - ./docker/unbound/unbound.conf:/etc/unbound/unbound.conf:ro
+      - ./docker/unbound/forward-${DNS_UPSTREAM_MODE:-plain}.conf:/etc/unbound/forward.conf:ro
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -69,6 +71,7 @@ services:
       dockerfile: docker/doh/Dockerfile
       args:
         DNS_REF: ${DNS_REF:-main}
+        CACHEBUST: ${CACHEBUST:-0}
     # unbound 와 네트워크 스택을 공유한다. 127.x.y.z 바인딩의 전제다.
     network_mode: "service:unbound"
     environment:
@@ -93,6 +96,7 @@ services:
       args:
         WEB_REF: ${WEB_REF:-main}
         MODEL_REF: ${MODEL_REF:-main}
+        CACHEBUST: ${CACHEBUST:-0}
     volumes:
       - ./artifacts:/srv/artifacts:ro
     environment:

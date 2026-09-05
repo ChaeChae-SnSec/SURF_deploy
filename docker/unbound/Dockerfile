@@ -46,6 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=build /opt/unbound /opt/unbound
 
+# make install 은 unbound 바이너리와 별개로 파이썬 쪽 헬퍼를 site-packages 에 넣는다.
+# 이걸 빠뜨리면 기동 시 ModuleNotFoundError: No module named 'unboundmodule' 로 죽는다.
+COPY --from=build /usr/local/lib/python3.11/site-packages/unboundmodule.py \
+                  /usr/local/lib/python3.11/site-packages/unboundmodule.py
+
 # CPU 전용 휠을 쓴다. GPU 런타임이 딸려오면 이미지가 몇 배로 불어난다.
 RUN pip install --no-cache-dir \
         --extra-index-url https://download.pytorch.org/whl/cpu \
@@ -55,6 +60,11 @@ RUN pip install --no-cache-dir \
         redis prometheus-client python-dotenv
 
 WORKDIR /srv/app
+# 브랜치 이름은 그대로인데 커밋만 바뀌면 도커가 아래 clone 레이어를 캐시에서
+# 재사용해 옛 코드가 그대로 들어간다. 이미지를 새 커밋으로 갱신할 때는
+# CACHEBUST 를 바꿔서 이 지점부터 다시 받게 한다.
+#   CACHEBUST=$(date +%s) docker compose build
+ARG CACHEBUST=0
 RUN git clone --depth 1 --branch "${DNS_REF}" \
         https://github.com/ChaeChae-SnSec/SURF_dns_server.git \
     && git clone --depth 1 --branch "${MODEL_REF}" \

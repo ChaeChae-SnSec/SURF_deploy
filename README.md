@@ -59,9 +59,12 @@ docker compose ps
 
 | 호스트명 | 서비스 |
 |---|---|
-| `dns.<도메인>` | `http://localhost:8053` |
-| `api.<도메인>` | `http://localhost:5000` |
-| `dash.<도메인>` | `http://localhost:3000` |
+| `dns.<도메인>` | `http://unbound:8053` |
+| `api.<도메인>` | `http://api:5000` |
+| `dash.<도메인>` | `http://grafana:3000` |
+
+cloudflared 도 컨테이너라 `localhost` 가 아니라 서비스 이름으로 가리켜야 한다.
+DoH 종단이 `unbound` 인 것은 doh 가 unbound 의 네트워크 네임스페이스를 쓰기 때문이다.
 
 `dash` 는 Cloudflare Access 로 잠근다. 잠그지 않으면 대시보드가 인터넷에 공개된다.
 
