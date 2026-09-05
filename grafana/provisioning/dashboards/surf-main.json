@@ -1,13 +1,13 @@
 {
   "uid": "surf-main",
   "title": "SURF — AI DGA 탐지",
-  "description": "DNS 경로와 확장 단독 경로를 함께 본다",
+  "description": "DNS 경로와 확장 단독 경로를 합쳐 본다",
   "tags": [
     "surf"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "refresh": "5s",
   "time": {
@@ -17,7 +17,7 @@
   "panels": [
     {
       "type": "stat",
-      "title": "모델 판정 질의",
+      "title": "판정 질의",
       "datasource": {
         "type": "prometheus",
         "uid": "surf-prom"
@@ -28,11 +28,12 @@
         "x": 0,
         "y": 0
       },
+      "description": "DNS 경로와 확장 경로를 합친 값. 캐시에서 응답한 것은 빠진다.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "color": {
-            "mode": "text"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -56,8 +57,7 @@
         },
         "textMode": "auto",
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto"
+        "graphMode": "area"
       },
       "targets": [
         {
@@ -65,12 +65,11 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(surf_dns_queries_total{result!=\"ignored\"})",
-          "legendFormat": "총 질의",
+          "expr": "(sum({__name__=~\"surf_(dns|ext)_queries_total\", result!=\"ignored\"}) or vector(0))",
+          "legendFormat": "판정 질의",
           "refId": "A"
         }
-      ],
-      "description": "판별 모듈까지 도달한 질의. 캐시에서 응답한 것은 빠진다."
+      ]
     },
     {
       "type": "stat",
@@ -85,6 +84,7 @@
         "x": 6,
         "y": 0
       },
+      "description": "두 경로 합산",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -113,8 +113,7 @@
         },
         "textMode": "auto",
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto"
+        "graphMode": "area"
       },
       "targets": [
         {
@@ -122,7 +121,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(surf_dns_blocked_total)",
+          "expr": "(sum({__name__=~\"surf_(dns|ext)_blocked_total\"}) or vector(0))",
           "legendFormat": "차단",
           "refId": "A"
         }
@@ -130,7 +129,7 @@
     },
     {
       "type": "stat",
-      "title": "차단율 (모델 판정 기준)",
+      "title": "차단율 (판정 기준)",
       "datasource": {
         "type": "prometheus",
         "uid": "surf-prom"
@@ -141,12 +140,13 @@
         "x": 12,
         "y": 0
       },
+      "description": "실제로 판정한 질의 중 차단 비율. 전체 질의 대비가 아니다. 반복되는 정상 도메인은 캐시에서 응답해 판정까지 오지 않으므로 분모에 들어가지 않는다.",
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "decimals": 1,
           "color": {
-            "mode": "text"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -170,8 +170,7 @@
         },
         "textMode": "auto",
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto"
+        "graphMode": "area"
       },
       "targets": [
         {
@@ -179,12 +178,11 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(surf_dns_queries_total{result=\"blocked\"}) / clamp_min(sum(surf_dns_queries_total{result!=\"ignored\"}), 1) * 100",
-          "legendFormat": "차단율",
+          "expr": "(sum({__name__=~\"surf_(dns|ext)_queries_total\", result=\"blocked\"}) or vector(0)) / clamp_min((sum({__name__=~\"surf_(dns|ext)_queries_total\", result!=\"ignored\"}) or vector(0)), 1) * 100",
+          "legendFormat": "차단율 (판정 기준)",
           "refId": "A"
         }
-      ],
-      "description": "모델이 실제로 판정한 질의 중 차단 비율이다. 전체 DNS 질의 대비가 아니다. 반복되는 정상 도메인은 unbound 캐시에서 바로 응답해 모듈까지 오지 않으므로 분모에 들어가지 않는다. 총 질의 패널과 DoH 질의 패널의 수가 벌어지는 것도 같은 이유다."
+      ]
     },
     {
       "type": "stat",
@@ -199,12 +197,13 @@
         "x": 18,
         "y": 0
       },
+      "description": "두 경로 합산",
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "decimals": 3,
           "color": {
-            "mode": "text"
+            "mode": "thresholds"
           },
           "thresholds": {
             "mode": "absolute",
@@ -228,8 +227,7 @@
         },
         "textMode": "auto",
         "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto"
+        "graphMode": "area"
       },
       "targets": [
         {
@@ -237,7 +235,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(surf_ai_inference_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"surf_(ai|ext_ai)_inference_duration_seconds_bucket\"}[5m])) by (le))",
           "legendFormat": "AI 추론 p95",
           "refId": "A"
         }
@@ -256,7 +254,7 @@
         "x": 0,
         "y": 4
       },
-      "description": "DNS 서버가 초당 처리한 질의를 판정 결과별로 나눈 것",
+      "description": "판정 결과별 초당 처리량. 두 경로를 합친 값이다.",
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
@@ -265,9 +263,7 @@
             "fillOpacity": 8,
             "showPoints": "never",
             "spanNulls": true,
-            "gradientMode": "none",
-            "axisBorderShow": false,
-            "axisGridShow": true
+            "axisBorderShow": false
           }
         },
         "overrides": [
@@ -339,7 +335,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(rate(surf_dns_queries_total{result=\"allowed\"}[1m]))",
+          "expr": "sum(rate({__name__=~\"surf_(dns|ext)_queries_total\", result=\"allowed\"}[1m]))",
           "legendFormat": "정상",
           "refId": "A"
         },
@@ -348,7 +344,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(rate(surf_dns_queries_total{result=\"blocked\"}[1m]))",
+          "expr": "sum(rate({__name__=~\"surf_(dns|ext)_queries_total\", result=\"blocked\"}[1m]))",
           "legendFormat": "차단",
           "refId": "B"
         },
@@ -357,7 +353,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "sum(rate(surf_dns_queries_total{result=\"whitelist\"}[1m]))",
+          "expr": "sum(rate({__name__=~\"surf_(dns|ext)_queries_total\", result=\"whitelist\"}[1m]))",
           "legendFormat": "화이트리스트",
           "refId": "C"
         }
@@ -376,7 +372,7 @@
         "x": 14,
         "y": 4
       },
-      "description": "모델 추론에만 걸린 시간. 전처리와 Redis 조회는 뺀 값",
+      "description": "모델 추론에만 걸린 시간. 전처리와 Redis 조회는 뺀 값.",
       "fieldConfig": {
         "defaults": {
           "unit": "s",
@@ -385,9 +381,7 @@
             "fillOpacity": 8,
             "showPoints": "never",
             "spanNulls": true,
-            "gradientMode": "none",
-            "axisBorderShow": false,
-            "axisGridShow": true
+            "axisBorderShow": false
           }
         },
         "overrides": [
@@ -459,7 +453,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(surf_ai_inference_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate({__name__=~\"surf_(ai|ext_ai)_inference_duration_seconds_bucket\"}[5m])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -468,7 +462,7 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(surf_ai_inference_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"surf_(ai|ext_ai)_inference_duration_seconds_bucket\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
@@ -477,45 +471,84 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(surf_ai_inference_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate({__name__=~\"surf_(ai|ext_ai)_inference_duration_seconds_bucket\"}[5m])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
         }
       ]
     },
     {
-      "type": "table",
-      "title": "차단된 도메인",
+      "type": "timeseries",
+      "title": "경로별 판정",
       "datasource": {
         "type": "prometheus",
         "uid": "surf-prom"
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 8,
+        "w": 8,
         "x": 0,
         "y": 13
       },
-      "description": "누적 차단 횟수 상위 15개",
+      "description": "DNS 서버를 거친 질의와 확장이 직접 판정한 질의. 두 경로가 동시에 도는지 여기서 확인한다.",
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisBorderShow": false
           }
         },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
+        "overrides": [
           {
-            "displayName": "건수",
-            "desc": true
+            "matcher": {
+              "id": "byName",
+              "options": "DNS 서버"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "확장 단독"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d95926"
+                }
+              }
+            ]
           }
         ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
@@ -523,93 +556,18 @@
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "topk(15, sum by (domain) (surf_dns_blocked_total))",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "job": true,
-              "instance": true
-            },
-            "renameByName": {
-              "domain": "도메인",
-              "Value": "건수"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "type": "table",
-      "title": "클라이언트별 질의",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "surf-prom"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 13
-      },
-      "description": "DoH 를 쓰면 여기에 토큰이 찍힌다. 랩 안에서 직접 붙으면 IP 가 찍힌다",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
+          "expr": "sum(rate(surf_dns_queries_total{result!=\"ignored\"}[1m]))",
+          "legendFormat": "DNS 서버",
+          "refId": "A"
         },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "displayName": "건수",
-            "desc": true
-          }
-        ]
-      },
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "surf-prom"
           },
-          "expr": "topk(10, sum by (client_ip) (surf_dns_queries_total{result!=\"ignored\"}))",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "job": true,
-              "instance": true
-            },
-            "renameByName": {
-              "client_ip": "클라이언트",
-              "Value": "건수"
-            }
-          }
+          "expr": "sum(rate(surf_ext_queries_total[1m]))",
+          "legendFormat": "확장 단독",
+          "refId": "B"
         }
       ]
     },
@@ -623,10 +581,10 @@
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 0,
-        "y": 22
+        "x": 8,
+        "y": 13
       },
-      "description": "브라우저가 DoH 로 보낸 질의 전체. 캐시 응답을 포함하므로 모델 판정 질의보다 많다. 응답이 잘리면 tcp 로 재질의한다.",
+      "description": "브라우저가 DoH 로 보낸 질의 전체. 캐시 응답을 포함하므로 판정 질의보다 많다.",
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
@@ -635,9 +593,7 @@
             "fillOpacity": 8,
             "showPoints": "never",
             "spanNulls": true,
-            "gradientMode": "none",
-            "axisBorderShow": false,
-            "axisGridShow": true
+            "axisBorderShow": false
           }
         },
         "overrides": [
@@ -702,7 +658,7 @@
     },
     {
       "type": "timeseries",
-      "title": "확장 단독 모드 판정",
+      "title": "확장 캐시 적중",
       "datasource": {
         "type": "prometheus",
         "uid": "surf-prom"
@@ -710,10 +666,10 @@
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 8,
-        "y": 22
+        "x": 16,
+        "y": 13
       },
-      "description": "hit 은 캐시에서 답한 것. miss 만 실제로 모델을 돌린다",
+      "description": "hit 은 캐시에서 답한 것. miss 만 실제로 모델을 돌린다.",
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
@@ -722,9 +678,7 @@
             "fillOpacity": 8,
             "showPoints": "never",
             "spanNulls": true,
-            "gradientMode": "none",
-            "axisBorderShow": false,
-            "axisGridShow": true
+            "axisBorderShow": false
           }
         },
         "overrides": [
@@ -803,6 +757,130 @@
       ]
     },
     {
+      "type": "table",
+      "title": "차단된 도메인",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "surf-prom"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 9,
+        "x": 0,
+        "y": 21
+      },
+      "description": "두 경로를 합친 누적 차단 상위 15개",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "건수",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "surf-prom"
+          },
+          "expr": "topk(15, sum by (domain) ({__name__=~\"surf_(dns|ext)_blocked_total\"}))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "renameByName": {
+              "domain": "도메인",
+              "Value": "건수"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "클라이언트별 질의",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "surf-prom"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 9,
+        "x": 9,
+        "y": 21
+      },
+      "description": "DoH 나 확장을 쓰면 토큰이, 53 에 직접 붙으면 IP 가 찍힌다.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "건수",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "surf-prom"
+          },
+          "expr": "topk(10, sum by (client_ip) ({__name__=~\"surf_(dns|ext)_queries_total\", result!=\"ignored\"}))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true
+            },
+            "renameByName": {
+              "client_ip": "클라이언트",
+              "Value": "건수"
+            }
+          }
+        }
+      ]
+    },
+    {
       "type": "timeseries",
       "title": "사용자 반응",
       "datasource": {
@@ -810,12 +888,12 @@
         "uid": "surf-prom"
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 22
+        "h": 9,
+        "w": 6,
+        "x": 18,
+        "y": 21
       },
-      "description": "차단 페이지에서 사용자가 누른 허용과 오탐 신고. 오탐 대응이 실제로 도는지 보는 자리",
+      "description": "차단 페이지에서 사용자가 누른 허용과 오탐 신고. 오탐 대응이 실제로 도는지 보는 자리.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
