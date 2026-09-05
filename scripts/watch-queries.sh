@@ -52,6 +52,12 @@ docker compose logs -f --tail 0 unbound 2>/dev/null | while IFS= read -r line; d
             ;;
     esac
 
+    # 헬스체크는 우리 시스템이 스스로 던지는 점검 질의다. 30초마다 끼어들어
+    # 시연 흐름을 끊으므로 기본으로 숨긴다. SHOW_HEALTH=1 이면 보여준다.
+    if [ "${SHOW_HEALTH:-0}" != "1" ] && [ "$CLIENT" = "healthcheck" ]; then
+        continue
+    fi
+
     # 필터가 걸려 있으면 그 기기의 질의만 통과시킨다.
     if [ -n "$FILTER" ] && [ "$CLIENT" != "$FILTER" ]; then
         continue
