@@ -10,11 +10,16 @@ ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim AS build
 
 ARG UNBOUND_VERSION=1.20.0
+ARG PYTHON_VERSION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential ca-certificates curl pkg-config swig \
         libssl-dev libexpat1-dev libevent-dev bison flex \
     && rm -rf /var/lib/apt/lists/*
+
+# configure 가 이 값을 안 주면 python3.11.16 처럼 패치 버전까지 붙은 실행 파일을
+# 찾다가 실패한다. 이미지에 있는 이름은 python3.11 이다.
+ENV PYTHON_VERSION=${PYTHON_VERSION}
 
 RUN curl -fsSL "https://nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz" \
         -o /tmp/unbound.tar.gz \
