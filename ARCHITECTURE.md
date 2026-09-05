@@ -100,6 +100,58 @@ cloudflared proxy-dns --address 127.0.0.1 --port 53 \
 질의는 브라우저를 거치지 않으므로, 그것을 막는 장면은 A 나 B 로는 만들 수 없다.
 DGA 차단이라는 주장의 핵심이 여기 걸려 있다.
 
+OS 의 DNS 설정 칸은 IP 주소만 받는다. 우리 서버는 공인 IP 로 53 을 열 수 없으므로
+(열면 오픈 리졸버가 된다) 기기 안에 다리를 하나 두고 `127.0.0.1` 을 가리키게 한다.
+
+**윈도우**
+
+[릴리스 페이지](https://github.com/cloudflare/cloudflared/releases)에서
+`cloudflared-windows-amd64.exe` 를 받는다. 53 은 특권 포트라 관리자 권한
+PowerShell 에서 실행한다.
+
+```powershell
+netstat -ano | findstr ":53 "     # 먼저 점유 확인. Docker Desktop 과 ICS 가 흔하다
+
+.\cloudflared.exe proxy-dns --address 127.0.0.1 --port 53 `
+  --upstream "https://dns.<도메인>/dns-query/<토큰>"
+```
+
+DNS 설정은 `설정 → 네트워크 및 인터넷 → Wi-Fi → 하드웨어 속성 → DNS 서버 할당
+→ 편집 → 수동 → IPv4 켜기 → 기본 DNS: 127.0.0.1`.
+
+**macOS**
+
+```bash
+brew install cloudflared
+sudo lsof -nP -iUDP:53                          # 점유 확인. 보통 비어 있다
+
+sudo cloudflared proxy-dns --address 127.0.0.1 --port 53 \
+  --upstream "https://dns.<도메인>/dns-query/<토큰>"
+```
+
+DNS 설정은 `시스템 설정 → 네트워크 → Wi-Fi → 세부사항 → DNS` 에서 `127.0.0.1` 추가.
+
+**리눅스**
+
+`systemd-resolved` 가 `127.0.0.53:53` 을 잡고 있지만 `127.0.0.1:53` 은 보통 비어
+있어 그대로 쓸 수 있다.
+
+```bash
+sudo ss -ulnp | grep ':53 '                     # 점유 확인
+
+sudo cloudflared proxy-dns --address 127.0.0.1 --port 53 \
+  --upstream "https://dns.<도메인>/dns-query/<토큰>"
+
+nmcli con mod "<연결 이름>" ipv4.ignore-auto-dns yes ipv4.dns 127.0.0.1
+nmcli con up "<연결 이름>"
+```
+
+세 경우 모두 확인 방법은 같다.
+
+```bash
+nslookup vokqozlcrlgveiqj.org     # NXDOMAIN 이면 SURF 를 거치고 있다
+```
+
 ### D. 53 직결 — 시연이 아니라 데이터를 쌓는 자리
 
 OS 의 DNS 를 서버 IP 로 지정한다. 같은 망 안에서만 되므로 발표장에서는 쓸 수 없다.
@@ -155,6 +207,28 @@ surf_unbound.resolve_client_id("127.163.254.19")
 네트워크 IP가 되어 `127.` 판정이 깨지고 클라이언트 구분이 통째로 사라진다.
 
 DoH를 함께 쓰는 기기는 확장의 `CLIENT_TOKEN`과 DoH URL의 `?c=` 값이 같아야 한다.
+
+## 시연에서 로그를 보여줄 때
+
+`scripts/watch-queries.sh` 가 판정 결과만 골라 색을 입혀 흘려준다. 원본 로그는
+디버그 줄이 섞여 화면에 띄우기 어렵다.
+
+```bash
+./scripts/watch-queries.sh 10.3.0.16     # 그 기기의 질의만
+tmux new -s surf './scripts/watch-queries.sh 10.3.0.16'   # SSH 가 끊겨도 유지
+```
+
+여러 기기가 동시에 SURF 를 쓰고 있으면 화면이 섞이므로, 보여줄 기기 하나만 인자로
+넘긴다.
+
+**캐시 때문에 정상 도메인은 한 번만 찍힌다.** 같은 정상 도메인을 다시 조회하면
+unbound 가 캐시에서 응답해 판별 모듈까지 오지 않는다. 반면 차단은 모듈이 응답을
+직접 만들어 돌려주므로 캐시에 남지 않고, 몇 번을 조회해도 매번 로그에 찍힌다.
+시연의 핵심인 차단 장면은 반복해도 안전하다.
+
+터미널과 대시보드는 역할이 다르다. 터미널은 질의 하나하나가 실시간으로 판정되는
+것을, 대시보드는 그것이 쌓인 집계를 보여준다. 두 화면을 나란히 두면 설명이 겹치지
+않는다.
 
 ## Redis 키
 
