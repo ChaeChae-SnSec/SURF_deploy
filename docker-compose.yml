@@ -1,0 +1,156 @@
+# SURF 서비스 스택.
+#
+#                         인터넷
+#                            │
+#                     Cloudflare (도메인)
+#                            │
+#                      cloudflared (터널, 아웃바운드 전용)
+#         ┌──────────────────┼──────────────────┐
+#    dns.<도메인>        api.<도메인>       dash.<도메인>
+#    /dns-query          /predict            Grafana
+#         │                  │                   │
+#      doh :8053  ──►  unbound :53           api :5000
+#         └────────► redis ◄──┴───────────────────┘
+#                       │
+#                  prometheus ──► grafana
+#
+# doh 가 unbound 의 네트워크 네임스페이스를 공유하는 것이 핵심이다. 토큰마다
+# 127.x.y.z 를 배정해 그 주소를 소스로 질의를 보내야 Unbound 모듈이 클라이언트를
+# 구분할 수 있는데, 컨테이너가 분리되면 소스 주소가 도커 네트워크 IP 가 되어
+# 그 구분이 사라진다.
+
+name: surf
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "300", "10", "--appendonly", "no"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  unbound:
+    build:
+      context: .
+      dockerfile: docker/unbound/Dockerfile
+      args:
+        DNS_REF: ${DNS_REF:-main}
+        MODEL_REF: ${MODEL_REF:-main}
+    volumes:
+      - ./artifacts:/srv/artifacts:ro
+      - ./docker/unbound/unbound.conf:/etc/unbound/unbound.conf:ro
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      PROMETHEUS_PORT: 9101
+      PROJECT_ROOT: /srv/app
+      SURF_MODEL_VARIANT: ${SURF_MODEL_VARIANT:-drift}
+      SURF_ARTIFACT_DIR: /srv/artifacts
+      TORCH_THREADS: ${TORCH_THREADS:-2}
+    # doh 가 이 네임스페이스에 들어오므로 doh 포트도 여기서 연다.
+    expose:
+      - "53"
+      - "8053"
+      - "9101"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  doh:
+    build:
+      context: .
+      dockerfile: docker/doh/Dockerfile
+      args:
+        DNS_REF: ${DNS_REF:-main}
+    # unbound 와 네트워크 스택을 공유한다. 127.x.y.z 바인딩의 전제다.
+    network_mode: "service:unbound"
+    environment:
+      UNBOUND_HOST: 127.0.0.1
+      UNBOUND_PORT: 53
+      DOH_PORT: 8053
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      DOH_THREADS: ${DOH_THREADS:-16}
+    depends_on:
+      unbound:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      args:
+        WEB_REF: ${WEB_REF:-main}
+        MODEL_REF: ${MODEL_REF:-main}
+    volumes:
+      - ./artifacts:/srv/artifacts:ro
+    environment:
+      SERVER_PORT: 5000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      PROJECT_ROOT: /srv/app
+      SURF_MODEL_VARIANT: ${SURF_MODEL_VARIANT:-drift}
+      SURF_ARTIFACT_DIR: /srv/artifacts
+      TORCH_THREADS: ${TORCH_THREADS:-2}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-600}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-8}
+    expose:
+      - "5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${METRICS_RETENTION:-45d}
+    expose:
+      - "9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD 를 .env 에 설정하세요}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN 을 .env 에 설정하세요}
+    depends_on:
+      - unbound
+      - api
+      - grafana
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:

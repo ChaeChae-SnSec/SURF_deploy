@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Unbound 안의 판별 모듈. DNS 경로 지표(surf_dns_*)가 여기서 나온다.
+  - job_name: surf-dns
+    static_configs:
+      - targets: ['unbound:9101']
+
+  # DoH 종단. doh 컨테이너가 unbound 의 네트워크를 공유하므로 주소가 unbound 다.
+  - job_name: surf-doh
+    static_configs:
+      - targets: ['unbound:8053']
+
+  # HTTP API. 확장 단독 모드 지표(surf_ext_*)가 여기서 나온다.
+  - job_name: surf-api
+    static_configs:
+      - targets: ['api:5000']
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

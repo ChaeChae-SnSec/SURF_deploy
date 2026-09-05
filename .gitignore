@@ -1,0 +1,5 @@
+.env
+artifacts/
+*.pt
+*.json.part
+*.pt.part
