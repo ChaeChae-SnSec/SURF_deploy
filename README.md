@@ -63,7 +63,15 @@ docker compose ps
 | `api.<도메인>` | `http://api:5000` |
 | `dash.<도메인>` | `http://grafana:3000` |
 
-cloudflared 도 컨테이너라 `localhost` 가 아니라 서비스 이름으로 가리켜야 한다.
+대시보드 개편으로 이 설정은 **Public Hostname 이 아니라 Routes 탭**에 있다.
+터널을 연 다음 Routes → Add route 로 셋을 등록한다.
+
+주소를 서비스 이름으로 쓰는 것은 cloudflared 를 이 스택의 컨테이너로 돌리기
+때문이다. 호스트에 직접 설치한 cloudflared 를 쓴다면 도커 네트워크 이름이 보이지
+않으므로 `BIND_ADDR` 로 연 주소(예: `10.3.0.15:8053`)를 대신 넣어야 한다. 둘을
+동시에 돌리면 커넥터가 둘이 되어 요청이 나뉘고, 한쪽이 서비스에 닿지 못하면
+절반이 실패한다.
+
 DoH 종단이 `unbound` 인 것은 doh 가 unbound 의 네트워크 네임스페이스를 쓰기 때문이다.
 
 `dash` 는 Cloudflare Access 로 잠근다. 잠그지 않으면 대시보드가 인터넷에 공개된다.
